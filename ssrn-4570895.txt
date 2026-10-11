@@ -1,0 +1,1625 @@
+
+===== PAGE 1 =====
+(Research Article)
+DaCSeg: Divide and Conquer for Accurate 
+Overlapping 
+Chromosome 
+Instance 
+Segmentation in Metaphase Cell Images
+Xinyu Fan1, Hui Liu1, Hongdang Zheng1, Jingfang Zhai2, Lin Zhang 1,*
+1 School of Information and Control Engineering, China University of Mining and 
+Technology, Xuzhou 221116, Jiangsu, China.
+2Department of Prenatal Diagnosis Medical Center, Xuzhou Central Hospital, Xuzhou 
+221009, Jiangsu, China.
+* Corresponding author:lin.zhang@cumt.edu.cn
+Abstract:
+Chromosome segmentation is essential for karyotyping analysis, which provides a 
+reliable basis for subsequent disease diagnosis. Recent deep segmentation techniques 
+can significantly boost the efficiency of chromosome micrographs processing. 
+However, existing classical Mask R-CNN-based methods cannot deal with 
+chromosome overlapping issues highly susceptible to appearing in actual data. In this 
+paper, we argue that it is difficult for models to achieve accurate segmentation without 
+a specific design for complex overlapping. Therefore, we propose a divide-and-conquer 
+(DaC) automatic framework, which has better robustness for complex chromosome 
+instance segmentation. An overlapping judgment branch is designed to determine 
+whether the involved chromosomes overlap. To avoid missing detection, multi-instance 
+prediction (MIP) is introduced for overlapping ones. Next, an overlap-non-overlap 
+attention segmentation module, which facilitates non-local awareness of different parts 
+of chromosomes and is cascaded with a mask head, is proposed to decouple the 
+relationship between overlapping chromosomes. Finally, we design a shape prior 
+knowledge module for the pipeline to obtain reliable mask predictions. We also 
+construct a novel overlapping chromosome annotation (OCA) module to train the above 
+model effectively to obtain high-quality overlapping annotations. The experimental 
+results show that the proposed method achieves mean Average Precision (mAP) of 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 2 =====
+84.10%, AP50 of 98.61%, AP75 of 97.62%, Precision of 89.32%, Recall of 88.87%, 
+and F1-score of 89.09%, which are superior to other state-of-the-art methods. Code and 
+models are available at https://github.com/labiip/DaCSeg.
+Key words: overlapping chromosome segmentation, shape prior knowledge, multi-
+instance prediction
+1. Introduction
+Karyotype is the phenotype of chromosomes at mid-mitosis. There are 22 pairs of 
+autosomes and a pair of sex chromosomes in each healthy human cell[1]. Any 
+numerical abnormality or structural aberration can lead to genetic disorders such as 
+mental retardation [2] and congenital malformations[3]. Karyotype analysis identifies 
+chromosomal abnormalities and is a tool for diagnosing genetic diseases and prenatal 
+screening of pregnant women[4]. Traditional karyotype analysis is purely manual, 
+making the process tedious and complex. Automation and intelligence are necessary to 
+improve the efficiency of karyotype analysis [5]. Chromosome segmentation is the first 
+step in automated karyotype analysis and is the foundation for subsequent chromosome 
+classification and analysis. The primary objective is to separate the background from 
+the foreground in mid-term cell microscopy images, thereby extracting individual 
+chromosomes [6]. However, chromosomes are non-rigid, so multiple chromosomes 
+will overlap or adhere to each other, which requires a time-consuming, costly, and 
+manual effort to complete chromosome segmentation. Therefore, developing an 
+effective solution for segmenting overlapping chromosomes is urgent.
+Early studies proposed using geometric morphology-based methods to segment 
+overlapping chromosomes [7]. These methods extracted features such as concave and 
+convex points and skeletons and achieved some success in automated chromosome 
+segmentation. However, they relied on specific segmentation rules that anomalies and 
+noise could disrupt. Additionally, the process was complex and time-consuming, and 
+the accuracy and generalization ability needed improvement.
+More recently, deep learning has led to the emergence of automatic chromosome 
+segmentation models based on convolutional neural networks. State-of-the-art 
+approaches for chromosome instance segmentation typically use the Mask R-CNN [8] 
+paradigm, which has more potent generalization abilities than traditional algorithms 
+and can automatically learn object features to complete segmentation tasks. However, 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 3 =====
+these methods do not consider specific overlapping issues, and direct segmentation can 
+lead to poor segmentation details. As shown in Fig.1, the Mask R-CNN architecture 
+still faces the following three challenges when segmenting overlapping chromosomes: 
+(1) Chromosome overlap and crossover will likely lead to missed detection. As 
+shown in Fig. 1(a), when using Mask R-CNN to predict crossing-overlap chromosomes, 
+the two detection boxes overlap significantly, leading to missed detections of the 
+chromosomes marked by the dashed boxes.
+(2) Detection-based methods typically generate mask predictions through fully 
+convolutional networks. In contrast, the convolution operation meets the challenge of 
+capturing adequate contextual information and developing discriminative features due 
+to the limited receptive field. Fig. 1(b) and (c) show the occurrence of under and over-
+segmentation when Mask R-CNN segmented overlapping chromosomes (the 
+overlapping region is blue). 
+(3) Chromosome overlap also causes multiple objects in the receptive field during 
+segmentation, causing mask conflict, which cannot be resolved by the conventional 
+mask head design, resulting in significant errors.
+(a)
+(b)
+(c)
+Fig. 1: The chromosome instance segmentation results predicted by baseline. (a)The dashed boxes 
+indicate the missed detections(suppressed by NMS mistakenly). (b)(c)dashed boxes circling the blue 
+color indicate the occurrence of under- and over-segmentation of the overlapping chromosome 
+masks, respectively
+Thus, we propose an end-to-end model for overlapping chromosome segmentation 
+that fully considers the characteristics of chromosome datasets. Unlike most methods 
+that directly regress and segment single chromosome instances on the input image, our 
+DaCSeg approach incorporates the divide and conquer (DaC) strategy to distinguish 
+between overlapping and separated chromosomes. It also helps us to focus on the error-
+prone task of segmenting overlapping chromosomes step-by-step. To design a divide-
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 4 =====
+and-conquer approach, we propose an overlap judgment branch to determine whether 
+chromosomes overlap. For overlapping ones, we introduce multi-instance prediction 
+(MIP) of overlapping chromosomes in the object detection stage to obtain detection 
+boxes for all overlapping chromosomes, and the overlap-induced missed detection 
+problem is avoided by optimizing NMS. To provide a basis for subsequent decoupling 
+of overlapping relationships, we propose an algorithm that automatically marks the 
+overlapping region of chromosomes. With the overlapping annotations provided by the 
+above algorithm, we can explicitly model the overlapping and non-overlapping areas 
+of the overlapping chromosomes by using the attention mechanism and cascading the 
+features to the final mask head. To avoid inaccurate segmentation masks caused by 
+noise or overlapping chromosome mask conflicts effectively, we propose a prior 
+knowledge module to guide the segmentation of the model. Our carefully designed 
+DaCSeg achieves higher accuracy for end-to-end overlapping chromosome instance 
+segmentation. The main contributions of this paper are summarized as follows:  
+(1) To obtain a well-built overlapping chromosome dataset, we propose a universal 
+algorithm that automatically marks the overlapping region of chromosomes, called 
+overlapping chromosome annotation (OCA), which can be extended to other instance 
+segmentation datasets.
+(2) To divide and conquer the overlapping chromosomes, we build an overlapping 
+judgment branch to detect whether chromosome overlap occurs and present an 
+improved MIP for overlapping ones. Next, we propose an overlap-non-overlap 
+attention segmentation module to explore non-local connections using self-attention 
+mechanisms to unravel and explore the overlapping relationship between chromosomes 
+and better capture the information of highly overlapping regions for mask prediction.
+(3) To further correct the segmentation predictions and drive the network towards 
+rationalization, we propose a shape prior guided segmentation module, which captures 
+chromosome generic template shapes based on the behavior of human perception to 
+train the model behavior.
+2 Related Work
+Chromosome segmentation based on deep learning methods: There are two main 
+categories in deep learning-based chromosome segmentation methods: semantic and 
+instance segmentation. Semantic segmentation methods transform chromosome 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 5 =====
+segmentation into a pixel-level classification task[9]. For example, Hu et al.[10] first 
+used individual chromosomes segmented from mid-cell division images to synthesize 
+overlapping chromosome images by rotation and two-by-two superposition. They 
+constructed a neural network based on UNet[11] to achieve segmentation of two-by-
+two overlapping chromosomes, which has significantly improved accuracy and speed 
+compared with traditional segmentation methods. Semantic-based overlapping 
+chromosome segmentation methods[12-14] have achieved state-of-the-art performance 
+in the dataset [10]. Still, they are designed for synthetic datasets with overlapped 
+chromosome instances, which is inapplicable to clinical datasets with more complex 
+overlap situations. Chen et al. [15] enhanced the quality and quantity of the 
+chromosome dataset and then proposed hybrid attention module attention to extract key 
+features based on UNet. However, semantic-based chromosome segmentation methods 
+cannot distinguish different objects end-to-end. In contrast, the instance segmentation 
+framework is more suitable for chromosome segmentation tasks. 
+Chromosome 
+instance 
+segmentation: 
+Instance 
+segmentation 
+transforms 
+segmentation into a multi-task integrating object detection and semantic segmentation. 
+Most instance segmentation approaches typically adopt Mask R-CNN as their baseline. 
+Mask R-CNN adds a segmentation branch on top of Faster R-CNN[16] and, therefore, 
+has a backbone network of main feature extraction connected to a bounding box head, 
+which produces region proposals. These proposals are fed into a Fully Convolutional 
+Neural Network (FCN) for instance mask generation. PANet [17] adds a bottom-up 
+path on the basis of Mask R-CNN to shorten the information path between the lower 
+and the highest levels. Lin et al. [18] first constructed the chromosome instance 
+segmentation model AS-PANet based on PANet, which improved the accuracy of 
+instance segmentation by introducing chromosome counting branches. Huang et al. [19] 
+introduced multiple instance segmentation baselines to solve the overlapping 
+chromosome segmentation problem. The results showed that Mask R-CNN was the 
+most prominent chromosome instance segmentation performer. Pijackova et al. [20] 
+used Mask R-CNN to segment the overlapping chromosome clusters. However, the 
+direct application of the baseline model made some overlapping chromosomes still not 
+correctly segmented, so the authors used data enhancement strategies to improve the 
+accuracy. However, it requires a stepwise approach and does not address the problems 
+of the baseline model in overlapping cases. Mask Scoring R-CNN [21] introduces a 
+MaskIoU head to predict the mask quality scores and get more accurate mask 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 6 =====
+predictions according to IoU scores. Liu et al. [22] introduced the idea of Mask Scoring 
+R-CNN. They used IoU scores to gradually correct the errors generated by the instance 
+segmentation model Mask R-CNN in the detection and segmentation stages on 
+overlapping chromosome datasets and achieved a high performance. However, these 
+methods cannot handle some instance overlap problems, which are common in medical 
+application scenarios[23].
+Instance segmentation in overlapping scenarios: A common solution to alleviate 
+the overlap problem is to infer and reason overlapping objects, and the visible regions 
+as additional supervision can be leveraged to perceive the entire overlapping instance 
+accurately [24]. For example, Ke et al. [25] proposed a bilayer convolution network 
+(BCNet) to model the overlapping relationship. However, BCNet is designed for 
+natural images that lack the fine-grained characteristics of medical images. In medical 
+images, nucleus segmentation is considered an intricate task in histopathology image 
+analysis because overlapping regions make it hard to separate and tell apart independent 
+nuclei [26]. Dogar et al. [27] proposed a novel deep-learning model that uses a soft 
+attention mechanism to produce more precise and refined feature maps, resulting in 
+finer instance segmentation in the overlapping nuclei. 
+3. Methods
+Our approach is motivated by the observation that chromosome segmentation errors 
+tend to occur at the locations where chromosome clusters overlap rather than in regions 
+where single chromosomes are present and do not overlap. However, existing classical 
+Mask R-CNN-based methods fail to address overlapping chromosome challenges 
+effectively. We argue that divide-and-conquer for overlapping chromosomes and 
+breaking the challenges down step-by-step can carefully improve segmentation 
+accuracy. The framework of the new model is presented in Fig. 2. Firstly, we propose 
+the overlapping chromosome annotation (OCA) algorithm to get the regions of 
+overlapping and non-overlapping masks. As for the model pipeline, we design an 
+overlapping judgment branch to determine whether chromosomes overlap. It helps us 
+incorporate multi-instance prediction (MIP) on the overlapping chromosomes during 
+the object detection stage, reducing the likelihood of missed detections for crossing-
+overlap chromosomes and providing better detection results. With the overlapping 
+annotations provided by the OCA algorithm, we design the overlap-non-overlap 
+attention segmentation module to mine the overlapping region more accurately, which 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 7 =====
+consists of two branches connected in a cascade manner. Finally, to further obtain more 
+complete mask predictions, we propose the shape prior to guiding the segmentation 
+module. The feature maps with shape prior to regularization are incorporated into the 
+model to segment the overlapping chromosomes.
+Fig. 2: Overview of the proposed DaCSeg
+3.1 New Overlap Chromosomes Annotation Algorithm
+We have organized chromosome analysis experts to label clinical chromosome 
+datasets. However, the annotated data cannot consider the overlapping relationship 
+between chromosomes and separate cross-overlapping chromosomes ineffectively. To 
+solve the crossing-overlap chromosome segmentation, we propose to obtain the dataset 
+of overlapping chromosomes with overlapping and non-overlapping mask annotations. 
+However, manual annotation is very time-consuming, so we apply the OCA algorithm 
+to automatically label the crossing-overlapping chromosomes, as described in 
+Algorithm 1. When the OCA algorithm obtains overlapping and non-overlapping 
+masks of each overlapping chromosome, they will be added to the chromosome 
+overlapping annotation information; if the chromosomes do not overlap, 0 is added to 
+the overlapping annotation. 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 8 =====
+In the OCA algorithm, 
+is the set of chromosome images and
+is the 
+chromosome mask set of
+. 
+is the chromosome boxes set of 
+, where 
+ 
+and 
+ are the total chromosome masks and boxes of 
+-th image respectively. 
+and 
+ are the 
+-th mask and box in the 
+-th image. 
+ and 
+ are the final set 
+of overlap and non-overlap masks, respectively. We first stack all chromosome masks, 
+and if the chromosome overlaps, the mask values will be superimposed, and the set 
+after stacking is M. The superimposed value minus the initial value can get the 
+corresponding overlapping region mask, and the overlapping mask is subtracted from 
+the complete mask to obtain the mask of the non-overlapping region. Each original 
+Algorithm 1 OCA Algorithm
+Input: 
+1：
+,
+,
+,
+Output: 
+,
+,
+,
+2：
+,
+3：for 
+ in 
+do    
+//for the total chromosome masks 
+and boxes of each image
+4：  for 
+ in 
+ do   //for each chromosome mask 
+5：    
+M
+//stack all single chromosome mask 
+6：  for 
+ in 
+ do
+7：    
+//get single overlap mask and the crop 
+area of box
+8：    
+When get single overlap mask od  do
+9：      
+//get single non-overlap mask and the 
+crop area of box
+10：   end for
+11：  end for
+12：end for
+13：return 
+,
+I
+I
+M
+I
+I
+B
+I
+kI
+M
+kI
+B
+kI
+n
+m
+nb
+n
+kI
+O
+´
+O
+
+1
+K
+k
+k
+I
+
+
+I
+
+
+1
+k
+K
+I
+k
+M
+
+
+I
+M
+
+
+1
+k
+K
+I
+k
+B
+
+
+I
+B
+
+
+1
+k
+N
+I
+n
+n
+M
+m
+
+
+
+1
+k
+N
+I
+n
+n
+B
+b
+
+
+
+
+1
+=
+k
+K
+I
+k
+O
+
+O
+
+
+1
+´
+´ k
+K
+I
+k
+O
+
+
+oO
+
+1
+k
+D
+I
+d
+d
+O
+o
+
+
+
+1
+k
+D
+'
+'
+I
+d
+d
+O
+o
+
+
+{}
+
+D
+}
+´
+{
+
+D
+
+
+,
+,
+k
+k
+I
+I
+k M
+I
+B
+
+
+,
+,
+I
+I
+I
+M
+B
+n
+m
+kI
+M
+n=1
+N
+n
+m
+
+nb
+kI
+B
+kI
+O
+
+
+Slice(
+=(M -
+)) n
+k
+b
+I
+d
+M
+o
+
+´ kI
+O
+
+
+'
+Slice(
+-
+) n
+b
+d
+d
+d
+m o
+o
+
+
+O
+´
+O
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 9 =====
+image is annotated with two binary images representing the overlapping and non-
+overlapping regions. An example is shown in Fig. 3.
+(a)
+(b)
+(c)
+(d)
+Fig. 3: OCA algorithm for overlapping chromosomes. (a) Original image. (b) Binary image after 
+stacking all single chromosome masks. (c) Binary image with annotations of overlapping regions. 
+(d) Binary image annotated with non-overlapping regions.
+3.2 Multi-Instance Prediction of Overlapping Chromosomes
+As shown in Fig. 4, the two chromosomes share almost the same bounding boxes 
+when chromosomes overlap. Three proposal boxes(green, blue, and red) are heavily 
+overlapped. It is difficult for each proposal box to predict a single instance(may be 
+empty), which is intrinsically difficult as the proposals share very similar features. 
+Moreover, only one prediction likely survives after NMS. Therefore, following the 
+strategies used in[28], we design multiple instance predictions in the overlapped 
+chromosome detection. Not one proposal predicts one chromosome, but the 
+overlapping chromosomes are also predicted.
+(a)
+(b)
+(c)
+Fig. 4: A typical case in overlapping chromosomes detection. (a) Two overlapping chromosomes 
+share almost the same bounding boxes. (b) Single prediction paradigm. (c) Each proposal predicts 
+a set of chromosome instances
+Specifically, for each proposal box 
+, the new scheme suggests predicting the 
+correlated set of ground-truth instances 
+ instead of a single object, which is 
+ib
+( )
+i
+G b
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 10 =====
+formulated as:
+(1)
+where 
+ is the set of all ground truth boxes and 
+ is a given threshold of the 
+intersection-over-union (IoU) ratio. We introduce K detection functions to generate a 
+set of predictions
+, which is expressed as:
+ 
+(2)
+where K is a given constant standing for the maximum cardinality of 
+ in the 
+dataset. 
+ is the category confidence and 
+is relative coordinates. 
+is 
+implemented by introducing extra prediction branches, as shown in the MIP module in 
+Fig. 2, which predicts two detection boxes.
+Inspired by minimizing the gap between the prediction box and the ground-truth in 
+the paper[29], we introduce the EMD loss to minimize the Earth Mover’s Distance 
+between the prediction set 
+ and the ground-truth instance set 
+ 
+corresponding to the proposal 
+. The loss is given by：
+(3)
+where 
+ represents a specific permutation of 
+whose 
+-th item is 
+; 
+is the 
+ ground-truth box; 
+and 
+are classification 
+loss(using Binary Cross Entropy loss) and box regression loss (using SmoothLoss), 
+respectively. 
+Besides, an optimization of NMS is required to solve missing detection caused by 
+overlapping boxes being filtered out as redundant boxes in the NMS stage. The 
+optimization of NMS is named Set NMS. Each time before one box suppresses another 
+in the NMS algorithm, we insert an additional test to check whether the two boxes come 
+from the same proposal; if yes, the suppression is skipped. 
+3.3 The Overlap-non-overlap Attention Segmentation Module
+3.3.1 Overlapping Attention Module
+Recently Transformer[30] has been introduced to computer vision due to its excellent 
+performance in NLP[31-33]. It uses the attention mechanism to capture global 
+background information, building a long-distance dependence on the target and 
+
+
+( )
+g
+| IoU( ,
+)
+i
+j
+i
+i
+G b
+b g
+
+
+
+
+G
+G
+
+( )
+i
+P b
+(1)
+(1)
+(2)
+(2)
+(
+)
+(
+)
+( )
+{(
+,
+),(
+,
+),...,(
+,
+)}
+K
+K
+i
+i
+i
+i
+i
+i
+i
+P b
+c
+l
+c
+l
+c
+l
+
+( )
+i
+G b
+ic
+il
+( )
+i
+P b
+( )
+i
+P b
+( )
+i
+G b
+ib
+( )
+( )
+π
+π
+π
+1
+( )
+min
+(
+,
+)
+(l
+,
+)
+k
+k
+K
+k
+k
+i
+cls
+i
+reg
+i
+k
+b
+c
+g
+g
+
+
+
+
+
+
+
+
+
+Ls
+L
+L
+
+
+
+1,2,
+, K
+
+k
+k
+
+π
+( )
+k
+i
+g
+G b
+
+k
+
+( )
+cls 
+L
+( )
+reg 
+L
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 11 =====
+extracting more powerful features. For highly overlapping chromosomes, segmentation 
+results usually cover multiple instances incorrectly, resulting in over- or under-
+segmentation of the overlap, as in Fig. 1(b) and (c). Therefore, we construct the Overlap 
+Attention Module (OAM) to establish the associative attention between overlapping 
+pixels of chromosomes, non-overlapping pixels, and target segmented chromosomes. 
+The OAM consists of node features updated by global information propagation within 
+the entire feature layer. Specifically, the OAM operation is expressed as:
+(4)
+where 
+ is the input feature, 
+is the number of pixel grids in the RoI, 
+and C is the feature dimension. 
+ and 
+ represent two trainable transform functions 
+implemented by 
+convolution and applied to X to obtain 
+ and 
+.
+denotes the pair-wise similarity between every two pixels by the dot 
+product. 
+ is the learnable weight matrix for the output transform, which 
+is a weighted focus on the feature map of each RoI to obtain the global dependency of 
+any two positions in the feature map. 
+ is the output feature of OAM,
+ 
+including layer normalization and ReLU functions.
+3.3.2 The Workflow of The Overlap-non-overlap Attention Segmentation Module
+As shown in Fig. 2, we extend two convolutional branches based OAM in the 
+overlap-non-overlap attention segmentation module. The first branch is responsible for 
+segmenting the overlapping chromosomes' overlapping regions and fusing the first 
+OAM output to the second branch. The second branch is responsible for segmenting 
+the non-overlapping regions of the overlapping chromosomes and their boundaries and 
+merging the output of the second OAM into the final output. Specifically, the input ROI 
+feature 
+ is cropped FPN feature map given by RoI Align operation for the target 
+region.  
+For the first branch, as shown in Fig. 2, we feed 
+ to a 3×3 convolutional layer 
+for the OAM input, then we further obtain a feature map calculated by (4). Next, we 
+apply three different 3×3 convolutional layers on the output of OAM to obtain the 
+feature map 
+, then we feed 
+ to the up-sampling layer and 1×1 
+convolutional layer to obtain a two-channel feature map for overlap mask predictions
+.
+For the second branch, we fuse
+ into 
+ by performing element-wise 
+
+
+
+
+
+
+
+
+
+
+
+V
+V
+=
+X
+X=
+X
+T
+Q
+K
+Z
+softmax X X
+softmax
+X
+X
+
+
+
+
+
+X
+C H W
+
+
+
+H
+W
+
+
+
+1 1
+
+Q
+X
+K
+X
+Q
+K
+HW HW
+X X
+
+
+V
+X
+'
+C
+H W
+
+
+
+Z
+'
+C
+H W
+
+
+
+( )
+
+Xroi
+Xroi
+Zoverlap
+Zoverlap
+Moverlap
+Zoverlap
+Xroi
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 12 =====
+summation to obtain the input feature, and the following workflow is the same as the 
+first branch. Then we obtain a feature map 
+ and two feature maps for non-
+overlap mask prediction 
+and boundary prediction 
+. 
+3.3.3 Loss Function
+The whole overlap-non-overlap attention segmentation module can be trained in an 
+end-to-end manner defined by a multi-task loss function. The first branch is trained by 
+, the second branch is trained by 
+and 
+respectively, 
+which are shown below: 
+(5)
+(6)
+(7)
+where 
+ denotes the mask segmentation loss of overlapping region. 
+ 
+and 
+ denote the mask segmentation and boundary detection loss of non-
+overlapping region respectively.
+ denotes the binary cross-entropy loss, 
+ 
+and 
+ represent the ground-truth masks of overlapping and non-overlapping 
+region obtained by OCA. 
+ is the ground-truth boundary of the non-
+overlapping region that can be readily computed from mask annotations.
+3.4 The Shape Prior Guiding Segmentation Module
+The shape prior guide segmentation module is designed to guide the model to 
+segment chromosome masks using shape-prior knowledge of chromosomes. We 
+observed that although chromosomes are usually shown as bent or deformed in the 
+metaphase image, they can be summarized as regular schemes[34], usually displayed 
+as thin strips in the border box of the marker, and positioned along the diagonal or 
+horizontal or vertical direction, as shown in Fig.7(a). Therefore, it is reasonable to 
+introduce several general-template masks to represent patterns of chromosomes. 
+  In the pre-training phase, to model the shape prior, we collect the ground-truth masks 
+in the training set and use an auto-encoder to obtain the embedding of each mask. Then, 
+we partition the embeddings into 5 clusters via K-Means clustering and use the centers 
+of these clusters as a codebook. Thus, the codebook could memorize the embeddings 
+Znon overlap
+
+Mnon overlap
+
+Bnon overlap
+
+overlap-M
+L
+non-overlap-M
+L
+non-overlap-B
+L
+
+
+overlap-M
+BCE
+=
+M
+,
+M
+overlap
+overlap
+GT
+L
+L
+
+
+non-overlap-M
+BCE
+=
+M
+,
+M
+non overlap
+non overlap
+GT
+
+
+L
+L
+
+
+non-overlap-B
+BCE
+=
+,
+B
+non overlap
+non overlap
+B
+GT
+
+
+L
+L
+overlap-M
+L
+non-overlap-M
+L
+non-overlap-B
+L
+BCE
+L
+M
+overlap
+GT
+M
+non overlap
+GT
+
+B
+non overlap
+GT
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 13 =====
+of chromosome shape prior. This codebook is used to further refine the mask head to 
+output a more accurate mask. 
+In the training phase, for a predicted coarse mask, we feed it into the encoder of the 
+pre-trained auto-encoder to obtain the embedding. According to the predicted template 
+mask, we use an L2 distance to find the nearest embeddings in the template codebook. 
+Then we feed the nearest embedding into the decoder to get the decoded shape prior 
+feature map 
+. The output feature map 
+ can help the model mitigate the 
+misleading effect due to the cross-overlapping features, which can guide the 
+segmentation of the model together after integrating the a priori knowledge. The loss 
+of the shape prior to the guided segmentation module can be denoted by: 
+(8)
+where f is the mask head consisting of four 3×3 convolutional layers, an up-sampling 
+layer, and a 1×1 convolutional layer, as shown in Fig. 2. 
+ is the ground-
+truth mask of a complete chromosome. The 
+ is the element-wise summation.
+4. Experiments：
+4.1 Datasets
+We collect 985 Giemsa stained microscopic metaphase images with a resolution of 
+1600 × 1200 containing 40575 objects from a medical technology company in Suzhou. 
+All images are labeled by a biologist with a rectangle bounding box and a mask 
+associated with each chromosome. 60% of the images was allocated for training, while 
+the remaining 40% images were equally partitioned and referred to as validation set
+and test set. We combine the training set and validation set as trainval set, and use the 
+trainval set to train different methods and report final results on the testing set for fair 
+comparisons. Besides, to quantify the impact of overlapping chromosomes 
+segmentation, we summarized different numbers of overlapping chromosomes from 
+985 metaphase cell images. The statistics are shown in Table 1. The ratio of overlapping 
+chromosomes for 985 metaphase images containing 40575 chromosomes is 
+approximately 14.71%.
+Table 1： Statistics of overlapping chromosomes from 40575 clinical metaphase cell images in 
+training/validation/testing set. The percentages are calculated as ”(# of overlapping chromosome * 
+statistics of all datasets) / 40,575”.
+Msp
+Znon overlap
+
+
+
+
+
+
+
+BCE
+=
+M , Z
+,
+M
+shape
+sp
+non overlap
+chromosome
+f
+sum
+GT
+
+L
+L
+M
+chromosome
+GT
+(, )
+sum 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 14 =====
+Overlapping chromosomes
+Training set
+Validation set
+Testing set
+All datasets
+2
+1465
+440
+509
+2414(11.90%)
+3
+140
+36
+102
+278(2.06%)
+4
+29
+9
+25
+63(0.53%)
+5 or more
+3
+4
+11
+18(0.22%)
+All Overlapping chromosomes
+3481
+1044
+1479
+6004(14.71%)
+4.2 Implementation Details
+All experiments are performed under the PyTorch development framework, running 
+on NVIDIA GeForce RTX 2080Ti GPU with 64GB memory. The machine hardware 
+environment is Intel(R) Xeon(R) W-2175 CPU @2.50GHz processor. Due to the 
+hardware limitations, we resize input images and ensure that the input image size is a 
+multiple of 32. We set the batch size to 2 with 40 epochs. We use SGD optimizer to 
+update and optimize the network parameters through backpropagation. We set the 
+learning rate by decay strategy. The basic learning rate is 0.0025, decaying in the 27th 
+and 34th epochs, respectively, with a decay index of 0.1.
+4.3 Evaluation Metrics
+In our experiment, IoU=0.5 between the model prediction mask and the labeled mask 
+is used as the threshold to classify them as belonging to True Positive(TP) and False 
+Positive (FP), count their number and calculate Precision and Recall as the below:
+(9)
+(10)
+F1-score can comprehensively consider the harmonic value of Precision and Recall, 
+and the formula is as follows:
+(11)
+Then, the p(r) curve is drawn with the Recall value as the horizontal axis and the 
+Precision value as the vertical axis. Then, for each point on the p(r) curve, the value of 
+Precision is taken as the maximum Precision on the right side of the point to smooth 
+the p(r) curve. The equation is as follows:
+TP
+Precision
+TP
+FP
+
+
+TP
+Recall
+TP
+FN
+
+
+1
+2
+precision recall
+F
+score
+precision
+recall
+
+
+
+
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 15 =====
+(12)
+where
+ denotes the value of Precision, taking 100 equal points of 
+the horizontal axis 0-1 and calculating its average value as the final AP. The above 
+equations evaluate the accuracy and recall to obtain the approximate value AP(default 
+i=0.5) of Area Under Curve(AUC) under the specified IoU threshold, which will be 
+used as an indicator for subsequent experiments.
+To facilitate the model for penalizing poor results and optimizing good results, we 
+use three different AP metrics to objectively and comprehensively assess the effect of 
+the model: mean Average Precision(mAP), AP under IoU thresholds of 0.5(AP50)and 
+0.75(AP75), where the mAP metric calculation is calculated for IoU thresholds ranging 
+from 0.5 to 0.95 with a step size of 0.05. The equation is as follows:
+ 
+(13)
+AP50 and AP75 denote the predicted IoU threshold i=0.5 and 0.75, respectively. 
+Thus, the higher the threshold, the greater the requirement for the accuracy of matching 
+the prediction to the ground truth. The standard metrics used in this study allow a direct 
+comparison of future methods with the approach used in this paper.
+4.4 Comparisons With Other State-of-the-Art Methods
+4.4.1 Selection of baselines:
+In this section, we use the following related methods for comparison, shown in Table 
+2. To evaluate the effectiveness of some generalized instance segmentation frameworks 
+in specific chromosome segmentation tasks, we compare Mask R-CNN [8], PANet [17], 
+Cascade R-CNN [35], HTC [36] and Mask Scoring R-CNN [21] in chromosome dataset. 
+BCNet [25] focuses on instance segmentation in the case of occlusion. AS-PANet [18] 
+and RCNet [22] are instance segmentation frameworks designed for chromosome 
+datasets, and they improved the generalized instance segmentation frameworks based 
+on the characteristics of chromosomes. Owing to the increasing development of 
+advanced backbone and in-depth understanding of the Mask R-CNN problems, we take 
+ResNet101 as the backbone network of Mask R-CNN.
+~
+~
+~
+IoU=
+:
+1
+max
+( )
+101
+i
+r
+r
+r
+r R
+AP
+p r
+
+
+
+
+[0,0.01,0.02,.,1]
+R
+0.50
+0.55
+0.95
+...
+10
+mAP
+mAP
+mAP
+mAP
+
+
+
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 16 =====
+Table 2 Performance comparison of different models
+Methods
+mAP
+AP50
+AP75
+Precision
+Recall
+F1-score
+Mask R-CNN
+79.42
+97.42
+93.61
+87.75
+87.29
+87.52
+PANet
+76.22
+97.17
+92.18
+86.72
+86.31
+86.51
+Cascade R-CNN 
+80.34
+97.63
+93.60
+87.82
+87.79
+87.81
+HTC
+80.42
+97.43
+93.81
+87.83
+87.82
+87.83
+Mask Scoring R-CNN
+79.93
+97.64
+93.60
+87.58
+86.92
+87.25
+BCNet
+82.58
+97.71
+93.96
+88.15
+88.32
+88.23
+AS-PANet
+80.14
+97.63
+93.82
+87.78
+87.49
+87.63
+RC Net
+83.10
+97.72
+94.13
+88.26
+88.58
+88.42
+DaCSeg
+84.10
+98.61
+97.62
+89.32
+88.87
+89.09
+4.4.2 Results Analysis 
+From the results in Table 2, we can observe that DaCSeg can perform better in terms 
+of mean average precision and other metrics, demonstrating its effectiveness for 
+overlapping chromosome segmentation. The performance of the basic framework on 
+mAP is 79.42%, AP50 is 97.42%, and AP75 is 93.61%. Since PANet follows the 
+hyperparameters of Mask R-CNN, the segmentation results of PANet are not as good 
+as Mask R-CNN. The other general instance segmentation methods, Cascade R-CNN, 
+HTC, and Mask scoring R-CNN, compared to Mask R-CNN, have a certain degree of 
+improvement. BCNet pioneered the application of the Non-local module and Bilayer 
+Occlusion module in the mask head, which performs better than general instance 
+segmentation methods in overlapping chromosome segmentation scenarios. AS-PANet 
+and RCNet are instance segmentation models designed for the features of chromosome 
+datasets, and both achieve better results than Mask R-CNN. The mAP has improved by 
+0.72% and 3.68%, AP50 has improved by 0.21% and 0.3%, and AP75 has improved 
+by 0.21% and 0.52%, respectively. Our method performs best in these related methods. 
+The mAP, AP50, and AP75 are improved by 4.68% and 1.19%, 4.01% respectively, 
+compared with Mask R-CNN. Besides, AP50 and AP75 have a notable improvement 
+compared to other related methods, mainly due to our reasonable network design rather 
+than the network's direct expansion.
+4.4.3 Visualization Analysis
+The above experiments proved that our method has good segmentation ability. Next, 
+by visualizing the results of overlapping chromosome segmentation, we obtained Fig.5. 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 17 =====
+We observe that DacSeg shows excellent performance in the case of two or two 
+overlapping and multiple overlapping chromosomes.
+Original       
+GT       
+Mask R-CNN     
+AS-PANet      
+RCNet        
+DaCSeg
+Fig. 5: Qualitative comparison of instance segmentation for overlapping chromosomes 
+and different mask colors represent other chromosome instances.
+The first column is the input image. Because there are many objects in the input 
+image, to show the experimental results more clearly, some overlapping chromosomes 
+(in the red box part) are cut from the image, and the segmentation effect is displayed 
+on a larger scale. The second column is the ground truth, and the latter are the 
+visualization results of different instance segmentation methods.
+The first row shows the segmentation results of the two chromosomes overlapping, 
+and the chromosomes were missed in the Mask R-CNN and AS-PANet, as shown in 
+the red dashed box. The second row shows the segmentation results when the flexible 
+curved chromosomes overlap. It is demonstrated that the segmentation results of Mask 
+R-CNN, AS-PANet, and RCNet show significant errors, and the red dashed boxes 
+indicate the unsegmented masks. In this paper, by introducing shape prior knowledge, 
+the model realizes that the ring chromosome is a whole chromosome instead of an 
+adherent chromosome, thus avoiding mask loss during segmentation. The direction of 
+the red arrow is the over-segmentation and under-segmentation of the overlapping 
+region (superimposed color) when overlapping chromosome segmentation occurs. We 
+also improve the problem effectively by designing the overlap-non-overlap attention 
+segmentation module. The last row is the case of overlapping multiple chromosomes, 
+showing that other methods will have missing masks and severe under-segmentation of 
+the masks in the overlapping region. However, our approach can still improve such 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 18 =====
+problems with good generalization performance in the case of overlapping multiple 
+chromosomes.
+4.4 Ablation Studies
+  In this section, we summarize the overall ablation studies to justify the importance 
+of each proposed module in DaCSeg. The experiments for the ablation studies were 
+consistent with the final methods except for specific variations in each ablation study. 
+Mask R-CNN [8] was the benchmark in the ablation studies. Experimental results are 
+in Table 3.
+Table 3：Ablation study
+MIP
+Set 
+NMS
+Overlap
+Mask
+Non-overlap
+Mask
+Non-overlap
+Boundary
+Shape Prior
+Guide
+AP
+AP50
+AP75
+1
+
+79.99
+97.78
+94.04
+2
+
+
+81.75
+97.90
+94.21
+3
+
+
+
+82.52
+97.86
+94.14
+4
+
+
+
+82.74
+97.86
+94.23
+5
+
+
+
+
+83.12
+98.26
+96.83
+6
+
+
+
+
+
+83.48
+98.40
+97.01
+7
+
+
+
+
+
+
+84.10
+98.61
+97.62
+(1) The effect of Multiple Instance Prediction of overlapping chromosomes:
+We introduce MIP to the basic network and then optimize NMS, which can bring 
+effective performance. The experimental results for the benchmark Mask R-CNN are 
+Table 2, with mAP value of 79.42%, AP50 value of 97.42% and AP75 value of 93.61%. 
+Introducing MIP increases the mAP, AP50, and AP75 values by 0.57%, 0.36%, and 
+0.43%, respectively. It suggests that MIP can slightly enhance the segmentation 
+performance. The mAP, AP50, and AP75 values of MIP with Set NMS are higher than 
+that of the only MIP strategy by 1.76%, 0.12%, and 0.17%, respectively, which suggests 
+that the combination of suitable post-processing strategies can bring benefits for 
+instance segmentation.
+(2) The effect of the Overlap-non-overlap Attention Segmentation Module:
+To validate the effectiveness of the overlap-non-overlap attention segmentation 
+module, we experimented with the third, fourth, fifth, and sixth rows in Table 3. The 
+visualization results of each branch are shown in Fig. 6. The original image is shown in 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 19 =====
+Fig. 6(a). In our experiment, a branch (overlap mask) was first added to output the 
+overlapping region mask, shown in the 3rd row of Table 3 and visualized in Fig. 6(b). 
+Then, a branch (non-overlapping mask) is added to the above experiment to output the 
+non-overlapping region mask, shown in the 4th row of Table 3, visualized in Fig. 6(c). 
+Fig. 6(d) shows the non-overlapping region boundary output. In the 5th row of Table 
+3, the two branches are fused to output the overlapping and non-overlapping regions 
+simultaneously, resulting in segmentation results of 83.12% for mAP, 98.26% for AP50 
+and 96.83% for AP75. Therefore, making the model capture the overlapping regions of 
+the overlapping chromosomes more clearly can effectively improve the segmentation 
+performance on chromosome datasets prone to overlap and crossover. Besides, 
+segmentation errors of overlapping chromosomes tend to occur in the non-overlapping 
+region, and a clear and complete chromosome mask boundary can further optimize the 
+segmentation results. As shown in the 6th row of Table 3, the entire overlap-non-
+overlap attention segmentation module was constituted after adding the boundary 
+output branch (non-overlapping boundary) based on the previous experiments, and the 
+final mAP reached 83.48%, AP50 reached 98.4%, and AP75 reached 97.01%, which 
+achieved a significant gain. Therefore, the output integrity of overlapping and non-
+overlapping region masks and boundaries can improve network performance.
+(a)
+(b)
+(c)
+(d)
+Fig. 6: (a)original image of overlapping chromosomes; (b)output mask of the overlapping region; 
+(c) output mask of the non-overlapping region; (d) output boundary of the non-overlapping region.
+(3) The effect of the Shape Prior Guided Segmentation Module:  
+To investigate the effect of the shape prior guiding segmentation module, we add 
+the shape prior knowledge into the model and the results are shown in the 7th row of 
+Table 3. The gap between the results in the 6th and 7th rows shows the importance of 
+prior knowledge, which agree with the usage of shape prior in the perception of 
+karyotyping experts. The final results show that our method has achieved the 
+performance of mAP by 84.10%, AP50 by 98.61%, and AP75 by 97.62%. Fig. 7 shows 
+a schematic diagram of the segmentation results after a prior knowledge guiding. We 
+can see from the visualization results that chromosome overlap will interfere with the 
+segmentation, and the mask that does not belong to the chromosome part will also be 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 20 =====
+incorrectly segmented, whereas the correct mask will be obtained after adding a prior 
+guide.
+(a)
+(b)
+Fig. 7: The illustration of the shape prior guided segmentation module. (a) is the five 
+shape template masks of chromosomes. (b) is the result of segmentation before and 
+after the guidance of shape prior knowledge. The right columns of (b) are the binary 
+masks of the chromosomes to represent the improved results more clearly.
+5. Conclusion
+This paper proposes a novel end-to-end instance segmentation framework, DaCSeg, 
+to tackle the issue of complex overlapping chromosome segmentation. Firstly, we 
+present the OCA algorithm for obtaining overlapping chromosome ground truth masks 
+and design an overlapping judgment branch to determine if chromosomes overlap in 
+the model framework. Subsequently, we conduct further network design for 
+overlapping chromosomes. We incorporate the MIP and Set NMS strategy to prevent 
+detection boxes of overlapping chromosomes from being filtered out as redundant. 
+With such detection results, to mitigate severe overlapping issues of chromosome 
+instance masks, we innovatively propose an overlap-non-overlap attention module 
+inspired by the attention mechanism to decouple overlapping relationships and provide 
+abundant overlapping auxiliary predictive information for the final segmentation of 
+overlapping chromosomes. Additionally, we design a shape prior guiding segmentation 
+module, inspired by the perceptual behavior of karyotype experts, to enhance the mask 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 21 =====
+predictions and steer the segmentation network towards reasonable shape segmentation.
+Experimental results show that DaCSeg can capture the relationship between 
+overlapping chromosomes, suppress ambiguity caused by similar features of 
+overlapping chromosomes, and achieve more accurate segmentation results in cases of 
+chromosome overlap. However, accuracy and internal consumption must also be 
+considered in practical clinical applications. In the future, the model requires pruning 
+to enhance computational speed and efficiency while maintaining improved accuracy.
+Statements of ethical approval
+Not applicable.
+Funding statement
+This work was supported in part by the National Natural Science Foundation of 
+China under Grant 61971422, Xuzhou Science and Technology Innovation Plan - Key 
+Special Project for Social Development under Grant KC22112 and Priority Academic 
+Program Development of Jiangsu Higher Education Institutions under Grant 
+XZSYSKF2022019. 
+Declaration of Competing Interest
+The authors declare that the research was conducted without any commercial or 
+financial relationships that could be construed as a potential conflict of interest.
+References
+[1] M. Nicodemi, A. Pombo, Models of chromosome structure, Curr. Opin. Cell Biol., 28 (2014) 90-95, 
+doi:10.1016/j.ceb.2014.04.004.
+[2] B.G. Bender, D.B. Berch, Overview: psychological phenotypes and sex chromosome abnormalities, 
+Sex chromosome abnormalities and human behavior, (2019) 1-19, doi:10.1201/9780429305870.
+[3] M.H. Toufaily, M.N. Westgate, A.E. Lin, L.B. Holmes, Causes of Congenital Malformations, Birth 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 22 =====
+Defects Res, 110 (2018) 87-91, doi:10.1002/bdr2.1105.
+[4] F. Altinordu, L. Peruzzi, Y. Yu, X.J. He, A tool for the analysis of chromosomes: KaryoType, Taxon, 
+65 (2016) 586-592, doi:10.12705/653.9.
+[5] N. Xie, X. Li, K. Li, Y. Yang, H.T. Shen, Statistical karyotype analysis using CNN and geometric 
+optimization, IEEE Access, 7 (2019) 179445-179453, doi:10.1109/ACCESS.2019.2951723.
+[6] U.B. Balagalla, J. Samarabandu, A. Subasinghe, Automated human chromosome segmentation and 
+feature 
+extraction: 
+Current 
+trends 
+and 
+prospects, 
+F1000Research, 
+11 
+(2022) 
+301, 
+doi:10.12688/f1000research.84360.1.
+[7] S. Minaee, M. Fotouhi, B.H. Khalaj, A geometric approach to fully automatic chromosome 
+segmentation,  Annu. Int. Conf. IEEE Eng. Med. Biol. Soc. EMBS, IEEE, 2014, 1-6, 
+[8] K. He, G. Gkioxari, P. Dollár, R. Girshick, Mask R-CNN,  Proc. IEEE Conf. Comput. Vis. Pattern 
+Recognit., 2017, 2961-2969, doi:10.1109/ICCV.2017.322.
+[9] S.J. Hao, Y. Zhou, Y.R. Guo, A Brief Survey on Semantic Segmentation with Deep Learning, 
+Neurocomputing, 406 (2020) 302-321, doi:10.1016/j.neucom.2019.11.118.
+[10] R.L. Hu, J. Karnowski, R. Fadely, J.-P. Pommier, Image segmentation to distinguish between 
+overlapping human chromosomes, Adv. neural inf. proces. syst., 2017, doi:10.48550/arXiv.1712.07639 
+[11] O. Ronneberger, P. Fischer, T. Brox, U-Net: Convolutional Networks for Biomedical Image 
+Segmentation, Lect. Notes Comput. Sci., 9351 (2015) 234-241, doi:10.1007/978-3-319-24574-4_28.
+[12] H.M. Saleh, N.H. Saad, N.A.M. Isa, Overlapping chromosome segmentation using u-net: 
+Convolutional networks with test time augmentation,  Procedia Comput. Sci., 2019, 524-533, 
+doi:10.1016/j.procs.2019.09.207.
+[13] G.J. Wang, H. Liu, X.P. Yi, J.J. Zhou, L. Zhang, ARMS Net: Overlapping chromosome 
+segmentation based on Adaptive Receptive field Multi-Scale network, Biomed Signal Proces, 68 (2021) 
+102811, doi:10.1016/j.bspc.2021.102811.
+[14] S.F. Song, T.M. Bai, Y.X. Zhao, W.B. Zhang, C.X. Yang, J. Meng, F. Ma, J.L. Su, A New 
+Convolutional Neural Network Architecture for Automatic Segmentation of Overlapping Human 
+Chromosomes, Neural. Process. Lett., 54 (2022) 285-301, doi:10.1007/s11063-021-10629-0.
+[15] X. Chen, Q. Cai, N. Ma, H. Li, ChroSegNet: An Attention-Based Model for Chromosome 
+Segmentation with Enhanced Processing, Appl. Sci., 13 (2023) 2308, doi:10.3390/app13042308.
+[16] S. Ren, K. He, R. Girshick, J. Sun, Faster R-CNN: Towards real-time object detection with region 
+proposal networks, 28 (2015) 1137 - 1149, doi:10.1109/TPAMI.2016.2577031.
+[17] S. Liu, L. Qi, H. Qin, J. Shi, J. Jia, Path aggregation network for instance segmentation,  Proc. 
+IEEE Conf. Comput. Vis. Pattern Recognit., 2018, 8759-8768, doi:10.1109/CVPR.2018.00913.
+[18] C. Lin, G. Zhao, A. Yin, B. Ding, L. Guo, H. Chen, AS-PANet: A chromosome instance 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 23 =====
+segmentation method based on improved path aggregation network architecture, A.M.A. Archives of 
+Neurology Journal of Image and Graphics, 25 (2020) 2271-2280, doi:10.11834/jig.200236.
+[19] R. Huang, C. Lin, A. Yin, H. Chen, L. Guo, G. Zhao, X. Fan, S. Li, J. Yang, A Clinical Dataset and 
+Various Baselines for Chromosome Instance Segmentation, IEEE/ACM Trans. Comput. Biol. 
+Bioinform., 19 (2021) 31 - 39, doi:10.1109/TCBB.2021.3089507.
+[20] K. Pijackova, T. Gotthans, J. Gotthans, Deep Learning Pipeline for Chromosome Segmentation,  
+Int. Conf. Radioelektron., 2022, 197-201, doi:10.1109/Radioelektronika54537.2022.9764950.
+[21] Z. Huang, L. Huang, Y. Gong, C. Huang, X. Wang, Mask Scoring R-CNN,  Proc. IEEE Conf. 
+Comput. Vis. Pattern Recognit., 2019, 6409-6418, doi:10.1109/CVPR.2019.00657.
+[22] H. Liu, G. Wang, S. Song, D. Huang, L. Zhang, RC-Net: Regression correction for end-to-end 
+chromosome instance segmentation, Front. Genet., 13 (2022), doi:10.3389/fgene.2022.895099.
+[23] H. Jiang, R. Zhang, Y. Zhou, Y. Wang, H. Chen, DoNet: Deep De-overlapping Network for 
+Cytology Instance Segmentation,  Proceedings of the IEEE/CVF Conference on Computer Vision and 
+Pattern Recognition, 2023, 15641-15650, doi:10.48550/arXiv.2303.14373 
+[24] J. Breitenstein, T. Fingscheidt, Amodal Cityscapes: A New Dataset, its Generation, and an Amodal 
+Semantic Segmentation Challenge Baseline, 2022 IEEE Intelligent Vehicles Symposium (IV), IEEE, 
+2022, 1018-1025, doi:10.1109/IV51971.2022.9827342.
+[25] L. Ke, Y.-W. Tai, C.-K. Tang, Deep occlusion-aware instance segmentation with overlapping 
+bilayers, 
+Proc. 
+IEEE 
+Conf. 
+Comput. 
+Vis. 
+Pattern 
+Recognit., 
+2021, 
+4019-4028, 
+doi:10.1109/CVPR46437.2021.00401.
+[26] A. Basu, P. Senapati, M. Deb, R. Rai, K.G. Dhal, A survey on recent trends in deep learning for 
+nucleus segmentation from histopathology images, Evol Syst-Ger, (2023), doi:10.1007/s12530-023-
+09491-3.
+[27] G.M. Dogar, M. Shahzad, M.M. Fraz, Attention augmented distance regression and classification 
+network for nuclei instance segmentation and type classification in histology images, Biomed Signal 
+Proces, 79 (2023), doi:10.1016/j.bspc.2022.104199.
+[28] X. Chu, A. Zheng, X. Zhang, J. Sun, Detection in crowded scenes: One proposal, multiple 
+predictions, 
+Proc. 
+IEEE 
+Conf. 
+Comput. 
+Vis. 
+Pattern 
+Recognit., 
+2020, 
+12214-12223, 
+doi:10.1109/CVPR42600.2020.01223.
+[29] R. Stewart, M. Andriluka, A.Y. Ng, End-to-end people detection in crowded scenes,  Proc. IEEE 
+Conf. Comput. Vis. Pattern Recognit., 2016, 2325-2333, doi:10.1109/Cvpr.2016.255.
+[30] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A.N. Gomez, Ł. Kaiser, I. Polosukhin, 
+Attention is all you need, Adv. neural inf. proces. syst., 2017, doi:10.48550/arXiv.1706.03762.
+[31] E. Xie, W. Wang, Z. Yu, A. Anandkumar, J.M. Alvarez, P. Luo, SegFormer: Simple and efficient 
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed
+
+===== PAGE 24 =====
+design for semantic segmentation with transformers, Adv. Neural Inf. Process. Syst., 34 (2021) 12077-
+12090, doi:10.48550/arXiv.2105.15203 
+[32] S. Khan, M. Naseer, M. Hayat, S.W. Zamir, F.S. Khan, M. Shah, Transformers in vision: A survey, 
+ACM. Comput. Surv., 54 (2022) 1-41, doi:10.1145/3505244.
+[33] M.H. Guo, T.X. Xu, J.J. Liu, Z.N. Liu, P.T. Jiang, T.J. Mu, S.H. Zhang, R.R. Martin, M.M. Cheng, 
+S.M. Hu, Attention mechanisms in computer vision: A survey, Comput Vis Media, 8 (2022) 331-368, 
+doi:10.1007/s41095-022-0271-y.
+[34] L. Xiao, C.L. Luo, T.Q. Yu, Y.F. Luo, M.Q. Wang, F.H. Yu, Y.H. Li, C. Tian, J. Qiao, DeepACEv2: 
+Automated Chromosome Enumeration in Metaphase Cell Images Using Deep Convolutional Neural 
+Networks, IEEE T Med Imaging, 39 (2020) 3920-3932, doi:10.1109/Tmi.2020.3007642.
+[35] Z. Cai, N. Vasconcelos, Cascade R-CNN: Delving into high quality object detection,  Proc. IEEE 
+Conf. Comput. Vis. Pattern Recognit., 2018, 6154-6162, doi:10.1109/CVPR.2018.00644.
+[36] K. Chen, J. Pang, J. Wang, Y. Xiong, X. Li, S. Sun, W. Feng, Z. Liu, J. Shi, W. Ouyang, Hybrid 
+task cascade for instance segmentation, Proceedings of the IEEE/CVF conference on computer vision 
+and pattern recognition, 2019, 4974-4983, doi:10.1109/CVPR.2019.00511.
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4570895
+Preprint not peer reviewed

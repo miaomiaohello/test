@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+# ChromSeg 官方代码无 LICENSE, 仅本地参考不入库
+third_party/
+# 与本项目无关的个人学习文件
+caesar_test.cpp
+c.txt
+out.txt
+v.txt
+*.cpp
